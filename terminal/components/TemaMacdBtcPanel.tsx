@@ -10,7 +10,11 @@ interface TemaMacdSignal {
   sigTema: number;
   sigMacd: number;
   ensembleScore: number;
+  blendScore?: number;
   position: number;
+  borutaFeatures?: string[];
+  liveConfigUpdatedAt?: string;
+  configSource?: string;
 }
 
 export function TemaMacdBtcPanel() {
@@ -57,9 +61,19 @@ export function TemaMacdBtcPanel() {
               </span>
             </div>
             <div className="stat-row">
-              <span className="stat-label">Ensemble score</span>
-              <span className="stat-value">{data.ensembleScore.toFixed(2)}</span>
+              <span className="stat-label">Ensemble / blend</span>
+              <span className="stat-value">
+                {data.ensembleScore.toFixed(2)} / {(data.blendScore ?? data.ensembleScore).toFixed(2)}
+              </span>
             </div>
+            {data.borutaFeatures && data.borutaFeatures.length > 0 && (
+              <div className="stat-row">
+                <span className="stat-label">Boruta features</span>
+                <span className="stat-value" style={{ fontSize: 11 }}>
+                  {data.borutaFeatures.join(", ")}
+                </span>
+              </div>
+            )}
             <div className="stat-row">
               <span className="stat-label">Position (next bar)</span>
               <span
@@ -71,8 +85,9 @@ export function TemaMacdBtcPanel() {
               </span>
             </div>
             <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 12, marginBottom: 0 }}>
-              Long-only weighted ensemble (50% TEMA trend + 50% MACD). Matches{" "}
-              <code>tema_macd_ensemble_btc.ipynb</code>.
+              Loads Optuna/Boruta params from <code>terminal/config/tema_macd_btc_live.json</code>
+              {data.liveConfigUpdatedAt && <> · updated {data.liveConfigUpdatedAt}</>}
+              {data.configSource && <> · source {data.configSource}</>}
             </p>
           </>
         )}

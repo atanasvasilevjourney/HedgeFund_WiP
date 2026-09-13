@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import itertools
 from dataclasses import dataclass, replace
-from typing import Any, Callable
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -264,6 +265,192 @@ def wide_grid_search(
     return pd.DataFrame(rows).sort_values("objective", ascending=False)
 
 
+def eval_config_on_slice(
+    close_full: pd.Series,
+    eval_slice: pd.Series,
+    cfg: EnsembleConfig,
+    selected_features: list[str],
+    warmup: int = 220,
+) -> dict:
+    pos = int(close_full.index.get_loc(eval_slice.index[0]))
+    end = int(close_full.index.get_loc(eval_slice.index[-1]))
+    seed = close_full.iloc[max(0, pos - warmup) : end + 1]
+    df = backtest_blended(seed, cfg, selected_features).loc[eval_slice.index]
+    return enrich_stats(df)
+
+
+def run_optuna_multiobjective(
+    close_train: pd.Series,
+    close_val: pd.Series,
+    close_full: pd.Series,
+    selected_features: list[str],
+    n_trials: int = 120,
+    random_state: int = 42,
+) -> tuple[Any, pd.DataFrame, dict]:
+    """Pareto: maximize Sharpe, minimize |max_drawdown| on validation."""
+    import optuna
+
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    warmup = 220
+
+    def objective(trial: optuna.Trial) -> tuple[float, float]:
+        cfg = EnsembleConfig(
+            tema_period=trial.suggest_int("tema_period", 12, 120),
+            macd_fast=trial.suggest_int("macd_fast", 5, 20),
+            macd_slow=trial.suggest_int("macd_slow", 21, 55),
+            macd_signal=trial.suggest_int("macd_signal", 3, 12),
+            long_threshold=trial.suggest_float("long_threshold", 0.1, 0.65),
+            flat_threshold=trial.suggest_float("flat_threshold", 0.0, 0.2),
+            tema_weight=trial.suggest_float("tema_weight", 0.2, 0.8),
+        )
+        if cfg.macd_fast >= cfg.macd_slow:
+            raise optuna.TrialPruned()
+
+        st = eval_config_on_slice(close_full, close_val, cfg, selected_features, warmup)
+        sharpe_v = st.get("sharpe", float("nan"))
+        dd_abs = abs(st.get("max_drawdown", 1.0))
+        if np.isnan(sharpe_v):
+            raise optuna.TrialPruned()
+        trial.set_user_attr("calmar", st.get("calmar"))
+        trial.set_user_attr("objective", st.get("objective"))
+        return sharpe_v, dd_abs
+
+    study = optuna.create_study(
+        directions=["maximize", "minimize"],
+        sampler=optuna.samplers.NSGAIISampler(seed=random_state),
+    )
+    study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
+    picked = pick_pareto_knee(study)
+    trials_df = study.trials_dataframe()
+    return study, trials_df, picked
+
+
+def pick_pareto_knee(study: Any) -> dict:
+    """Choose Pareto trial balancing Sharpe vs drawdown."""
+    best_trials = study.best_trials
+    if not best_trials:
+        t = study.trials[0]
+        return {"trial_number": t.number, "params": t.params, "sharpe": None, "max_drawdown": None}
+
+    rows = []
+    for t in best_trials:
+        if len(t.values) < 2:
+            continue
+        sharpe_v, dd_abs = t.values[0], t.values[1]
+        rows.append(
+            {
+                "trial_number": t.number,
+                "params": t.params,
+                "sharpe": sharpe_v,
+                "max_drawdown": -dd_abs,
+                "score": sharpe_v - 2.5 * dd_abs,
+            }
+        )
+    if not rows:
+        t = best_trials[0]
+        return {
+            "trial_number": t.number,
+            "params": t.params,
+            "sharpe": t.values[0] if t.values else None,
+            "max_drawdown": -t.values[1] if t.values and len(t.values) > 1 else None,
+        }
+    best = max(rows, key=lambda r: r["score"])
+    return best
+
+
+def walk_forward_validate(
+    close: pd.Series,
+    cfg: EnsembleConfig,
+    selected_features: list[str],
+    n_splits: int = 5,
+    min_train: int = 400,
+    val_size: int = 120,
+    test_size: int = 120,
+    step: int = 120,
+    boruta_iter: int = 60,
+) -> pd.DataFrame:
+    """Rolling walk-forward: Boruta on train, evaluate cfg on OOS test slice."""
+    rows = []
+    start = min_train
+    fold = 0
+    while start + val_size + test_size <= len(close) and fold < n_splits:
+        train = close.iloc[:start]
+        val = close.iloc[start : start + val_size]
+        test = close.iloc[start + val_size : start + val_size + test_size]
+
+        fold_features, _ = run_boruta_selection(train, max_iter=boruta_iter)
+        features = fold_features or selected_features
+
+        st_val = eval_config_on_slice(close, val, cfg, features)
+        st_test = eval_config_on_slice(close, test, cfg, features)
+
+        rows.append(
+            {
+                "fold": fold,
+                "train_end": str(train.index[-1].date()),
+                "test_start": str(test.index[0].date()),
+                "test_end": str(test.index[-1].date()),
+                "val_sharpe": st_val.get("sharpe"),
+                "val_max_dd": st_val.get("max_drawdown"),
+                "test_sharpe": st_test.get("sharpe"),
+                "test_max_dd": st_test.get("max_drawdown"),
+                "test_objective": st_test.get("objective"),
+                "n_features": len(features),
+            }
+        )
+        start += step
+        fold += 1
+
+    return pd.DataFrame(rows)
+
+
+def export_live_config_from_research(
+    start: str = "2018-01-01",
+    boruta_iter: int = 100,
+    optuna_trials: int = 120,
+    walk_forward_splits: int = 5,
+    config_path: Path | None = None,
+) -> Path:
+    from strategies.tema_macd_live_config import LiveConfigPayload, save_live_config
+
+    close = load_btc_close(start)
+    train, val, test = split_series(close)
+    selected, _ = run_boruta_selection(train, max_iter=boruta_iter)
+
+    mo_study, _, picked = run_optuna_multiobjective(
+        train, val, close, selected, n_trials=optuna_trials
+    )
+    cfg = config_from_optuna_params(picked["params"])
+
+    wf_df = walk_forward_validate(
+        close, cfg, selected, n_splits=walk_forward_splits
+    )
+    holdout = evaluate_holdout(close, test, cfg, selected)
+
+    wf_summary = {}
+    if not wf_df.empty:
+        wf_summary = {
+            "folds": int(len(wf_df)),
+            "medianTestSharpe": float(wf_df["test_sharpe"].median()),
+            "medianTestMaxDd": float(wf_df["test_max_dd"].median()),
+            "medianTestObjective": float(wf_df["test_objective"].median()),
+        }
+
+    payload = LiveConfigPayload.from_ensemble(
+        cfg,
+        selected,
+        selection={
+            "method": "optuna_multiobjective_pareto_knee",
+            "sharpe": picked.get("sharpe"),
+            "maxDrawdown": picked.get("max_drawdown"),
+            "holdout": holdout,
+            "trialNumber": picked.get("trial_number"),
+        },
+        wf=wf_summary or None,
+    )
+    return save_live_config(payload, config_path)
+
+
 def run_optuna_study(
     close_train: pd.Series,
     close_val: pd.Series,
@@ -367,6 +554,8 @@ def run_full_pipeline(
     boruta_iter: int = 80,
     grid_max: int = 2000,
     optuna_trials: int = 100,
+    use_multiobjective: bool = True,
+    walk_forward_splits: int = 5,
 ) -> dict[str, Any]:
     close = load_btc_close(start)
     train, val, test = split_series(close)
@@ -374,16 +563,24 @@ def run_full_pipeline(
 
     selected, boruta_rank = run_boruta_selection(train, max_iter=boruta_iter)
     grid_df = wide_grid_search(train, val, close_full, selected, max_combos=grid_max)
-    study, trials_df = run_optuna_study(train, val, close_full, selected, n_trials=optuna_trials)
 
-    best_cfg = config_from_optuna_params(study.best_params)
+    picked: dict | None = None
+    if use_multiobjective:
+        mo_study, mo_trials, picked = run_optuna_multiobjective(
+            train, val, close_full, selected, n_trials=optuna_trials
+        )
+        best_cfg = config_from_optuna_params(picked["params"])
+        study = mo_study
+        trials_df = mo_trials
+    else:
+        study, trials_df = run_optuna_study(train, val, close_full, selected, n_trials=optuna_trials)
+        best_cfg = config_from_optuna_params(study.best_params)
 
-    sens = parameter_sensitivity(
-        pd.concat([train, val]),
-        best_cfg,
-        selected,
-    )
+    sens = parameter_sensitivity(pd.concat([train, val]), best_cfg, selected)
     holdout = evaluate_holdout(close_full, test, best_cfg, selected)
+    wf_df = walk_forward_validate(
+        close_full, best_cfg, selected, n_splits=walk_forward_splits
+    )
 
     return {
         "close": close,
@@ -395,7 +592,9 @@ def run_full_pipeline(
         "grid_results": grid_df,
         "optuna_study": study,
         "optuna_trials": trials_df,
+        "pareto_pick": picked,
         "best_config": best_cfg,
         "sensitivity": sens,
         "holdout_stats": holdout,
+        "walk_forward": wf_df,
     }

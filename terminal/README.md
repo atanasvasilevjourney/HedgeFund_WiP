@@ -44,6 +44,19 @@ Live web platform for the momentum engine and crypto scanner — deployed on **V
 
 6. **First load:** open the site and click **Refresh now** (or hit `/api/dashboard?refresh=1`) to seed data before the first cron tick.
 
+## TEMA + MACD BTC (Optuna/Boruta live config)
+
+The BTC ensemble panel reads **`config/tema_macd_btc_live.json`**, produced by:
+
+```bash
+pip install -r requirements_tema_macd_research.txt
+python3 scripts/export_tema_macd_live_config.py
+```
+
+This runs multi-objective Optuna (Sharpe vs drawdown Pareto), walk-forward checks, and writes params + Boruta features for the terminal API.
+
+Override in production with env var `TEMA_MACD_BTC_CONFIG_JSON` (full JSON blob).
+
 ## Local development
 
 ```bash
