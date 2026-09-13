@@ -5,6 +5,7 @@ import { MacroPanel } from "@/components/MacroPanel";
 import { BetaRotationPanel } from "@/components/BetaRotationPanel";
 import { ResearchTerminal } from "@/components/ResearchTerminal";
 import { AlertsFeed } from "@/components/AlertsFeed";
+import { TemaMacdBtcPanel } from "@/components/TemaMacdBtcPanel";
 import type { DailyEngineResult } from "@/lib/engine/daily-momentum";
 import type { CryptoScanResult } from "@/lib/engine/crypto-scanner";
 import type { AlertRecord } from "@/lib/db/store";
@@ -91,7 +92,10 @@ export default function HomePage() {
               tab={tab}
               onTabChange={setTab}
             />
-            <AlertsFeed alerts={data.alerts} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <TemaMacdBtcPanel />
+              <AlertsFeed alerts={data.alerts} />
+            </div>
           </section>
         </>
       )}

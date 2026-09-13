@@ -1,6 +1,6 @@
 export type PricePanel = Record<string, number[]>;
 
-async function fetchSingleTickerCloses(
+export async function fetchSingleTickerCloses(
   ticker: string,
   range: string
 ): Promise<{ dates: string[]; closes: number[] }> {
