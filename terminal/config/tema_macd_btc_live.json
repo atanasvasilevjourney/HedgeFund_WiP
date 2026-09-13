@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "updatedAt": "2026-09-13T07:13:31.742457+00:00",
+  "ensemble": {
+    "temaPeriod": 32,
+    "macdFast": 20,
+    "macdSlow": 48,
+    "macdSignal": 12,
+    "temaWeight": 0.7531245410138703,
+    "macdWeight": 0.24687545898612973,
+    "longThreshold": 0.5921550427352069,
+    "flatThreshold": 0.11957999576221703,
+    "longOnly": true,
+    "costBps": 10.0
+  },
+  "borutaFeatures": [
+    "rsi_7",
+    "tema_34_dist",
+    "macd_19_39_9_hist_norm",
+    "mom_5",
+    "tema_89_dist",
+    "macd_8_21_5_hist",
+    "vol_10",
+    "vol_21"
+  ],
+  "selection": {
+    "method": "optuna_multiobjective_pareto_knee",
+    "sharpe": 2.0477941735607925,
+    "maxDrawdown": -0.14434778305497553,
+    "holdout": {
+      "total_return": 0.2908707461505915,
+      "cagr": 0.15780533282858622,
+      "sharpe": 0.0203536507379451,
+      "max_drawdown": -0.2643445295224618,
+      "bars": 636,
+      "calmar": 0.5969684075311165,
+      "objective": -0.4315687304323186
+    },
+    "trialNumber": 7
+  },
+  "walkForward": {
+    "folds": 4,
+    "medianTestSharpe": 0.7366001429026147,
+    "medianTestMaxDd": -0.12747843145638638,
+    "medianTestObjective": 2.872221817411542
+  }
+}
