@@ -10,6 +10,17 @@ Single folder for Carver / TEMA / KAMA / unified swing / crypto allocation noteb
 | **2** | `carver_ultimate_daily_prop_engine_v1.ipynb` | Multi-bucket daily prop (indices / stocks / crypto) |
 | **3** | `carver_engine_tutorial_qqq.ipynb` | Layer-by-layer Carver tutorial on QQQ |
 | **4** | `carver_engine_with_cross_sectional.ipynb` | Cross-sectional momentum (Strategy 19) |
+| **5** | `rotation_engine.ipynb` | Equity/index rotation (multi-name book) |
+| **6** | `crypto_rotation_engine.ipynb` | Crypto-only rotation (OKX universe) |
+| **7** | `tema_macd_ensemble.ipynb` | TEMA + MACD ensemble research |
+| **8** | `live_momentum_scanner_slack.ipynb` | Crypto live scanner + Slack |
+
+## Data scripts
+
+| Script | Purpose |
+|--------|---------|
+| `fetch_okx.py` | OKX OHLCV fetch helper |
+| `fetch_top_1000.py` | Top market-cap universe helper |
 
 ## Lineage
 
