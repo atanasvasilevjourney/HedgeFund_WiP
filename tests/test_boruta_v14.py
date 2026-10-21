@@ -83,9 +83,13 @@ class SignalTests(unittest.TestCase):
             text,
             "TEMA(7,137,100) OR STC_REGIME(23,50,a,25,80) OR DOUBLE_KAMA",
         )
-        self.assertIn(text, format_panel(None))
-        self.assertIn(PUBLISHED["run_id"], format_panel(None))
-        self.assertIn("MED / STRONG", format_panel(None))
+        card = format_panel(None)
+        self.assertIn("TEMA(7,137,100)", card)
+        self.assertIn("STC_REGIME(23,50,a,25,80)", card)
+        self.assertIn("DOUBLE_KAMA", card)
+        self.assertIn(PUBLISHED["run_id"], card)
+        self.assertIn("MED / STRONG", card)
+        self.assertIn("OR_EVENT", card)
 
 
 class GridTests(unittest.TestCase):

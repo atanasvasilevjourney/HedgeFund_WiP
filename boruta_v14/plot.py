@@ -121,7 +121,7 @@ def plot_replay(close: pd.Series, result: Replay, path: str | Path, ohlc: pd.Dat
     ax_card.text(
         0.04,
         0.98,
-        format_panel(result).replace(" OR ", "\n  OR "),
+        format_panel(result),
         ha="left",
         va="top",
         color="#d7dde6",

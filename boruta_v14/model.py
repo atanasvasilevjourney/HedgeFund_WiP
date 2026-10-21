@@ -281,40 +281,50 @@ def replay(
 
 
 def format_panel(result: Replay | None = None) -> str:
-    """Published card from the screenshot, then the replay underneath it when given."""
+    """Published card from the screenshot, then the replay underneath it when given.
+
+    Lines stay short on purpose so the side column on the chart does not wrap
+    a label away from its value.
+    """
     p = PUBLISHED
     lines = [
-        f"{p['name']}",
+        p["name"],
         p["badge"],
-        f"Logic          {p['logic']}",
-        f"Members        {p['members']}",
-        f"Params         {params_line(TemaParams(), StcParams())}",
-        f"Model src      {p['model_src']}",
-        f"IS Sharpe      {p['is_sharpe']:.3f}",
-        f"OOS Sharpe     {p['oos_sharpe']:.3f}",
-        f"OOS DD         {p['oos_dd']:.2%}",
-        f"OOS Trades     {p['oos_trades']}",
-        f"Boruta         {p['boruta']}",
-        f"Sensitivity    {p['sensitivity']}",
-        f"Timeframe      {p['timeframe']}",
-        f"run            {p['run_id']}",
+        "",
+        f"Logic  {p['logic']}",
+        "Members",
+        "  TEMA",
+        "  STC_REGIME",
+        "  DOUBLE_KAMA",
+        "Params",
+        "  TEMA(7,137,100)",
+        "  OR STC_REGIME(23,50,a,25,80)",
+        "  OR DOUBLE_KAMA",
+        f"Src  {p['model_src']}",
+        f"IS Sharpe   {p['is_sharpe']:.3f}",
+        f"OOS Sharpe  {p['oos_sharpe']:.3f}",
+        f"OOS DD      {p['oos_dd']:.2%}",
+        f"OOS Trades  {p['oos_trades']}",
+        f"Boruta  {p['boruta']}",
+        f"Sens.  {p['sensitivity']}",
+        f"TF  {p['timeframe']}",
+        f"run {p['run_id']}",
     ]
     if result is None:
         return "\n".join(lines)
     lines += [
         "",
         "REPLAY",
-        f"Params         {result.params_text}",
-        f"IS window      {result.is_start.date()} -> {result.is_end.date()}",
-        f"OOS window     {result.oos_start.date()} -> end",
-        f"IS Sharpe      {result.is_stats.sharpe:.3f}",
-        f"OOS Sharpe     {result.oos_stats.sharpe:.3f}",
-        f"OOS return     {result.oos_stats.total_return:.2%}",
-        f"OOS DD         {result.oos_stats.max_dd:.2%}",
-        f"OOS Trades     {result.oos_stats.trades}",
-        f"Boruta         {result.boruta_label}",
-        *[f"  {name:<12} {grade}" for name, grade in result.member_grades.items()],
-        f"Sensitivity    {result.sensitivity.label}",
+        f"IS  {result.is_start.date()} -> {result.is_end.date()}",
+        f"OOS {result.oos_start.date()} -> end",
+        f"IS Sharpe   {result.is_stats.sharpe:.3f}",
+        f"OOS Sharpe  {result.oos_stats.sharpe:.3f}",
+        f"OOS return  {result.oos_stats.total_return:.2%}",
+        f"OOS DD      {result.oos_stats.max_dd:.2%}",
+        f"OOS Trades  {result.oos_stats.trades}",
+        f"Boruta  {result.boruta_label}",
+        *[f"  {name}  {grade}" for name, grade in result.member_grades.items()],
+        f"Sens.  {result.sensitivity.label}",
     ]
     return "\n".join(lines)
 
