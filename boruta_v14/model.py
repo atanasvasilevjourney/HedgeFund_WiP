@@ -313,7 +313,7 @@ def format_panel(result: Replay | None = None) -> str:
         f"OOS DD         {result.oos_stats.max_dd:.2%}",
         f"OOS Trades     {result.oos_stats.trades}",
         f"Boruta         {result.boruta_label}",
-        f"  members      {result.member_grades}",
+        *[f"  {name:<12} {grade}" for name, grade in result.member_grades.items()],
         f"Sensitivity    {result.sensitivity.label}",
     ]
     return "\n".join(lines)
