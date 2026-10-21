@@ -11,6 +11,7 @@ from boruta_v14.backtest import window_stats
 from boruta_v14.indicators import tema
 from boruta_v14.signals import TemaParams, tema_frame
 from boruta_v14.study import (
+    equity_path,
     grid_search_tema_lengths,
     make_split,
     score_window_np,
@@ -71,6 +72,16 @@ class FastScoreTests(unittest.TestCase):
             scores.append(stats.sharpe)
         self.assertEqual(outcome.best, combos[int(np.argmax(scores))])
         self.assertAlmostEqual(outcome.best_is, max(scores), places=6)
+
+    def test_equity_path_matches_total_return(self):
+        frame = tema_frame(self.close, TemaParams(7, 40, 70, kind="tema"))
+        stats = window_stats(
+            self.close, frame["entries"], frame["exits"], self.split.is_start, self.split.oos_end, 0.001, 0.001
+        )
+        equity = equity_path(
+            self.close, frame["entries"], frame["exits"], self.split.is_start, self.split.oos_end
+        )
+        self.assertAlmostEqual(float(equity.iloc[-1] - 1.0), stats.total_return, places=8)
 
 
 if __name__ == "__main__":

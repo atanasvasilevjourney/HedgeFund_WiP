@@ -40,7 +40,7 @@ from boruta_v14.model import (
     params_valid,
     replay,
 )
-from boruta_v14.signals import DoubleKamaParams, TemaParams
+from boruta_v14.signals import DoubleKamaParams, TemaParams, position_from_events
 
 ASSETS = ("LLY", "SPY", "QQQ", "IWM", "AAPL", "MSFT", "AMZN", "JPM", "XOM", "GLD")
 DOWNLOAD_START = "2014-01-01"
@@ -288,6 +288,41 @@ def _stats_row(method: str, symbol: str, stats, bh_oos: float, detail: str, is_s
         "oos_minus_bh": stats.sharpe - bh_oos,
         "detail": detail,
     }
+
+
+def equity_path(
+    close: pd.Series,
+    entries: pd.Series,
+    exits: pd.Series,
+    start,
+    end,
+    fees: float = 0.001,
+    slippage: float = 0.001,
+) -> pd.Series:
+    """Growth of $1. The position is rebuilt flat at ``start`` and carried to ``end``.
+
+    Same fills, costs, and first-bar return as ``window_stats``, so the last
+    point minus one equals that function's total return.
+    """
+    ent_exec, _ = execute_path(entries, exits)
+    ext_exec = exits.shift(1)
+    ext_exec = pd.Series(np.where(ext_exec.isna(), False, ext_exec), index=exits.index, dtype=bool)
+    sl = close.loc[start:end]
+    ent = ent_exec.reindex(sl.index).fillna(False).astype(bool)
+    ext = ext_exec.reindex(sl.index).fillna(False).astype(bool)
+    pos = position_from_events(ent, ext).astype(float)
+    ret = sl.pct_change().fillna(0.0)
+    turnover = pos.diff().abs()
+    turnover.iloc[0] = float(pos.iloc[0])
+    equity = (1.0 + pos * ret - turnover * (fees + slippage)).cumprod()
+    equity.name = "equity"
+    return equity
+
+
+def execute_path(entries: pd.Series, exits: pd.Series):
+    from boruta_v14.backtest import execute
+
+    return execute(entries, exits)
 
 
 def _hold_stats(close: pd.Series, start, end):
